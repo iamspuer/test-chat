@@ -3,66 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>最小通信テスト</title>
+    <title>最小構成チャット(デバッグ版)</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
     <h2>最小構成チャット</h2>
+    <div id="status" style="color: blue;">準備中...</div>
     
     <div id="setup">
-        <p>スマホでスキャンして接続：</p>
+        <p>スマホでスキャン：</p>
         <div id="qrcode"></div>
     </div>
 
     <div id="chat" style="display:none;">
         <input type="text" id="messageInput" placeholder="文字を入力">
         <button onclick="sendMsg()">送信</button>
-        <div id="log" style="border:1px solid #ccc; margin-top:10px; height:200px; overflow-y:auto;"></div>
+        <div id="log" style="border:1px solid #ccc; margin-top:10px; height:200px; overflow-y:auto; padding:5px;"></div>
     </div>
 
     <script>
-        const peer = new Peer(); // Peerオブジェクトの作成
+        const peer = new Peer();
         let conn;
 
-        // 1. 自分のIDが決まったら実行（主にPC側）
+        // ID発行
         peer.on('open', (id) => {
             const url = window.location.href.split('?')[0] + '?id=' + id;
             new QRCode(document.getElementById("qrcode"), url);
-            console.log("接続待ちID:", id);
+            document.getElementById("status").textContent = "接続待ちID: " + id;
+            console.log("PC側：準備完了。ID:", id);
         });
 
-        // 2. URLにIDがあれば自動接続（主にスマホ側）
+        // URLにIDがある場合（スマホ側）
         const partnerId = new URLSearchParams(window.location.search).get('id');
         if (partnerId) {
-            document.getElementById("setup").style.display = "none";
-            document.getElementById("chat").style.display = "block";
+            console.log("スマホ側：PCに接続を試みます...", partnerId);
             conn = peer.connect(partnerId);
             setupConn();
         }
 
-        // 3. 相手からの接続を待機（主にPC側）
+        // 相手からの接続を待機（PC側）
         peer.on('connection', (c) => {
+            console.log("PC側：接続を検知しました！");
             conn = c;
-            document.getElementById("setup").style.display = "none";
-            document.getElementById("chat").style.display = "block";
             setupConn();
         });
 
-        // 通信のセットアップ
         function setupConn() {
+            // データ受信時の処理
             conn.on('data', (data) => {
+                console.log("受信データ:", data);
                 addLog("相手: " + data);
             });
-            conn.on('open', () => addLog("接続完了！"));
+
+            // 接続が開いた時の処理
+            conn.on('open', () => {
+                console.log("通信路が完全に開きました");
+                document.getElementById("status").textContent = "接続完了！";
+                document.getElementById("setup").style.display = "none";
+                document.getElementById("chat").style.display = "block";
+                addLog("システム: 接続されました。");
+            });
+
+            conn.on('error', (err) => {
+                console.error("通信エラー:", err);
+            });
         }
 
-        // メッセージ送信
         function sendMsg() {
             const msg = document.getElementById("messageInput").value;
-            conn.send(msg);
-            addLog("自分: " + msg);
-            document.getElementById("messageInput").value = "";
+            if(conn && conn.open) {
+                conn.send(msg);
+                addLog("自分: " + msg);
+                document.getElementById("messageInput").value = "";
+            } else {
+                alert("接続が確立されていません");
+            }
         }
 
         function addLog(text) {
