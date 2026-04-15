@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最小通信テスト</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <h2>最小構成チャット</h2>
+    
+    <div id="setup">
+        <p>スマホでスキャンして接続：</p>
+        <div id="qrcode"></div>
+    </div>
+
+    <div id="chat" style="display:none;">
+        <input type="text" id="messageInput" placeholder="文字を入力">
+        <button onclick="sendMsg()">送信</button>
+        <div id="log" style="border:1px solid #ccc; margin-top:10px; height:200px; overflow-y:auto;"></div>
+    </div>
+
+    <script>
+        const peer = new Peer(); // Peerオブジェクトの作成
+        let conn;
+
+        // 1. 自分のIDが決まったら実行（主にPC側）
+        peer.on('open', (id) => {
+            const url = window.location.href.split('?')[0] + '?id=' + id;
+            new QRCode(document.getElementById("qrcode"), url);
+            console.log("接続待ちID:", id);
+        });
+
+        // 2. URLにIDがあれば自動接続（主にスマホ側）
+        const partnerId = new URLSearchParams(window.location.search).get('id');
+        if (partnerId) {
+            document.getElementById("setup").style.display = "none";
+            document.getElementById("chat").style.display = "block";
+            conn = peer.connect(partnerId);
+            setupConn();
+        }
+
+        // 3. 相手からの接続を待機（主にPC側）
+        peer.on('connection', (c) => {
+            conn = c;
+            document.getElementById("setup").style.display = "none";
+            document.getElementById("chat").style.display = "block";
+            setupConn();
+        });
+
+        // 通信のセットアップ
+        function setupConn() {
+            conn.on('data', (data) => {
+                addLog("相手: " + data);
+            });
+            conn.on('open', () => addLog("接続完了！"));
+        }
+
+        // メッセージ送信
+        function sendMsg() {
+            const msg = document.getElementById("messageInput").value;
+            conn.send(msg);
+            addLog("自分: " + msg);
+            document.getElementById("messageInput").value = "";
+        }
+
+        function addLog(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            document.getElementById("log").appendChild(div);
+        }
+    </script>
+</body>
+</html>
